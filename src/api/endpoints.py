@@ -1,10 +1,9 @@
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
-from openai import OpenAI
 import os
-import httpx
 from dotenv import load_dotenv
+from src.model.model_manager import ModelManager, DeepSeekModel, GPT2Model
 
 # 加载环境变量
 load_dotenv()
@@ -21,40 +20,49 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# 初始化 OpenAI 客户端
-client = OpenAI(
-    base_url='https://tbnx.plus7.plus/v1',
-    api_key=os.getenv("DEEPSEEK_API_KEY"),
-    http_client=httpx.Client()
-)
+# 初始化模型管理器
+model_manager = ModelManager()
+
+# 注册可用的模型
+model_manager.register_model("deepseek", DeepSeekModel(os.getenv("DEEPSEEK_API_KEY")))
+model_manager.register_model("gpt2", GPT2Model(os.getenv("GPT2_SERVICE_URL", "http://localhost:8018")))
 
 class ChatInput(BaseModel):
     message: str
+    model_name: str = "deepseek"  # 默认使用 DeepSeek 模型
 
 @app.post("/chat")
 async def chat_endpoint(data: ChatInput):
     """
     聊天接口
-    :param data: 用户输入的消息
+    :param data: 用户输入的消息和选择的模型
     :return: AI的回复
     """
     try:
-        # 使用 DeepSeek API 处理消息
-        response = client.chat.completions.create(
-            model="deepseek-chat",
-            messages=[
-                {"role": "system", "content": "你是一个有帮助的AI助手，请用中文回答用户的问题。"},
-                {"role": "user", "content": data.message}
-            ],
-            stream=False
-        )
+        # 获取选择的模型
+        model = model_manager.get_model(data.model_name)
+        if not model:
+            raise HTTPException(status_code=400, detail=f"模型 {data.model_name} 不存在")
+        
+        # 使用选择的模型生成响应
+        response = await model.generate_response(data.message)
         
         return {
-            "response": response.choices[0].message.content,
-            "status": "success"
+            "response": response,
+            "status": "success",
+            "model": data.model_name
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/models")
+async def list_models():
+    """
+    获取可用的模型列表
+    """
+    return {
+        "models": model_manager.list_models()
+    }
 
 @app.get("/health")
 async def health_check():

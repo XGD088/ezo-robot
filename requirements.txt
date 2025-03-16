@@ -6,3 +6,5 @@ pydantic==2.4.2
 python-multipart>=0.0.9
 gradio==4.19.2
 httpx==0.26.0
+langsmith==0.0.77
+langchain==0.1.12
