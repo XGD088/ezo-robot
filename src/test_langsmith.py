@@ -2,11 +2,12 @@ from dotenv import load_dotenv
 import os
 from langsmith import Client
 import logging
+from datetime import datetime
+from src.utils.logger import setup_logger
 
 
 # 配置日志
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+logger = setup_logger("langsmith_test")
 
 def test_langsmith_connection():
     """测试 LangSmith 连接"""
@@ -40,6 +41,24 @@ def test_langsmith_connection():
             if project not in [p.name for p in projects]:
                 logger.info(f"项目 {project} 不存在，正在创建...")
                 client.create_project(project_name=project)
+            
+            # 测试数据记录
+            logger.info("测试数据记录...")
+            run = client.create_run(
+                name="test_run",
+                run_type="llm",
+                inputs={"test": "Hello World"},
+                start_time=datetime.now(),
+                extra={"test": True}
+            )
+            
+            client.update_run(
+                run.id,
+                outputs={"result": "Test successful"},
+                end_time=datetime.now()
+            )
+            
+            logger.info(f"测试运行记录已创建: {run.id}")
             
         except Exception as e:
             # 如果是409错误（会话已存在），视为成功
