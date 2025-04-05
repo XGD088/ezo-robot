@@ -2,9 +2,12 @@ from abc import ABC, abstractmethod
 from typing import Dict, Any, Optional
 import time
 from dotenv import load_dotenv
+from langchain.memory import ConversationBufferMemory
+from langchain.chains import ConversationChain
+from langchain.prompts import ChatPromptTemplate, MessagesPlaceholder
+
 from src.utils.logger import setup_logger
 from langchain_openai import ChatOpenAI
-from langchain.prompts import ChatPromptTemplate
 from langchain.callbacks import get_openai_callback
 
 # 加载环境变量
@@ -37,11 +40,21 @@ class DeepSeekModel(BaseModel):
         
         self.prompt = ChatPromptTemplate.from_messages([
             ("system", "你是一个有帮助的AI助手，请用中文回答用户的问题。"),
+            MessagesPlaceholder(variable_name="chat_history"),
             ("human", "{input}")
         ])
+
+        self.memory = ConversationBufferMemory(
+            memory_key="chat_history",
+            return_messages=True
+        )
         
-        # 使用新的链式调用方式
-        self.chain = self.prompt | self.llm
+        self.chain = ConversationChain(
+            llm=self.llm,
+            memory=self.memory,
+            prompt=self.prompt,
+            verbose=True
+        )
 
     async def generate_response(self, message: str) -> str:
         start_time = time.time()
@@ -59,7 +72,8 @@ class DeepSeekModel(BaseModel):
             runtime = time.time() - start_time
             logger.info(f"请求完成，耗时: {runtime:.2f}秒")
             
-        return result.content if hasattr(result, 'content') else str(result)
+        return result["response"]
+
 
 class GPT2Model(BaseModel):
     def __init__(self, service_url: str = "http://localhost:8018"):
