@@ -1,13 +1,20 @@
 from abc import ABC, abstractmethod
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 import time
 from dotenv import load_dotenv
+from langchain.chains.conversational_retrieval.base import ConversationalRetrievalChain
 from langchain.memory import ConversationBufferMemory
 from langchain.chains import ConversationChain
 from langchain.prompts import ChatPromptTemplate, MessagesPlaceholder
+from langchain_community.vectorstores import Qdrant
 from langchain_core.language_models import BaseLLM
+from langchain_core.embeddings import Embeddings
+from openai.types import Embedding
 from pydantic import Field
+import os
+from openai import OpenAI
 
+from src.files.file_manager import load_documents, split_documents
 from src.utils.logger import setup_logger
 from langchain_openai import ChatOpenAI
 from langchain.callbacks import get_openai_callback
@@ -18,11 +25,44 @@ load_dotenv()
 # 配置日志
 logger = setup_logger("model_manager")
 
+class TongyiEmbeddings(Embeddings):
+    """通义千问的 embeddings 实现"""
+    def __init__(self):
+        self.client = OpenAI(
+            api_key=os.getenv("DASHSCOPE_API_KEY"),
+            base_url="https://dashscope.aliyuncs.com/compatible-mode/v1"
+        )
+        self.batch_size = 10  # 通义千问 API 的批量限制
+
+    def embed_documents(self, texts: List[str]) -> List[List[float]]:
+        """将多个文本转换为向量"""
+        try:
+            all_embeddings = []
+            # 分批处理文本
+            for i in range(0, len(texts), self.batch_size):
+                batch_texts = texts[i:i + self.batch_size]
+                response = self.client.embeddings.create(
+                    model="text-embedding-v3",
+                    input=batch_texts,
+                    encoding_format="float"
+                )
+                batch_embeddings = [embedding.embedding for embedding in response.data]
+                all_embeddings.extend(batch_embeddings)
+            return all_embeddings
+        except Exception as e:
+            logger.error(f"通义千问 embeddings 调用失败: {str(e)}")
+            raise
+
+    def embed_query(self, text: str) -> List[float]:
+        """将单个文本转换为向量"""
+        return self.embed_documents([text])[0]
+
 class BaseModel(ABC):
     def __init__(self):
         self.chain = None
         self.memory = None
         self.prompt = None
+        self.vectorstore = None
         self._setup_common_components()
 
     def _setup_common_components(self):
@@ -40,12 +80,24 @@ class BaseModel(ABC):
             ("human", "{input}")
         ])
 
+        # 加载文档并创建向量存储
+        documents = load_documents("statics")
+        texts = split_documents(documents)
+        embeddings = TongyiEmbeddings()  # 使用通义千问的 embeddings
+        self.vectorstore = Qdrant.from_documents(
+            documents=texts,
+            embedding=embeddings,
+            location=":memory:",
+            collection_name="my_documents"
+        )
+
     def _create_chain(self, llm):
         """创建对话链"""
-        return ConversationChain(
+        retriever = self.vectorstore.as_retriever()
+        return ConversationalRetrievalChain.from_llm(
             llm=llm,
+            retriever=retriever,
             memory=self.memory,
-            prompt=self.prompt,
             verbose=True
         )
 
@@ -55,7 +107,7 @@ class BaseModel(ABC):
         
         try:
             with get_openai_callback() as cb:
-                result = await self.chain.ainvoke({"input": message})
+                result = await self.chain.ainvoke({"question": message})
                 logger.info(f"Token使用情况: {cb}")
                 
         except Exception as e:
@@ -66,7 +118,7 @@ class BaseModel(ABC):
             runtime = time.time() - start_time
             logger.info(f"请求完成，耗时: {runtime:.2f}秒")
             
-        return result["response"]
+        return result["answer"]
 
     @abstractmethod
     def _setup_model_specific_components(self):

@@ -11,3 +11,6 @@ langchain>=0.2.0
 backoff==1.11.1
 langchain-openai>=0.1.25
 langchain-core>=0.2.40
+docx2txt>=0.8
+pypdf>=3.17.0
+qdrant-client>=1.7.0
