@@ -13,6 +13,9 @@ from openai.types import Embedding
 from pydantic import Field
 import os
 from openai import OpenAI
+import aiohttp
+import json
+import asyncio
 
 from src.files.file_manager import load_documents, split_documents
 from src.utils.logger import setup_logger
@@ -148,34 +151,53 @@ class GPT2Model(BaseModel):
         super().__init__()
         if not service_url:
             raise ValueError("GPT2服务URL不能为空")
-        self._setup_model_specific_components(service_url)
+        self.service_url = service_url
+        self._setup_model_specific_components()
 
-    def _setup_model_specific_components(self, service_url: str):
+    def _setup_model_specific_components(self):
         """设置GPT2特定的组件"""
-        class GPT2LLM(BaseLLM):
-            service_url: str = Field()
-            model_config = {"protected_namespaces": ()}
+        self.llm = None  # GPT2 不需要 LLM
+        self.chain = None  # GPT2 不需要 chain
 
-            def __init__(self, service_url: str):
-                super().__init__(service_url=service_url)
-
-            def _generate(self, prompts: list[str], **kwargs) -> str:
-                import requests
-                response = requests.post(
+    async def generate_response(self, message: str) -> str:
+        """生成响应"""
+        try:
+            timeout = aiohttp.ClientTimeout(total=30)  # 设置30秒超时
+            async with aiohttp.ClientSession(timeout=timeout) as session:
+                logger.info(f"向GPT2服务发送请求: {self.service_url}/predict")
+                logger.info(f"请求内容: {message}")
+                
+                async with session.post(
                     f"{self.service_url}/predict",
-                    json={"input_data": prompts[0]},  # 只处理第一个提示
-                    timeout=30
-                )
-                if response.status_code == 200:
-                    return response.json()["prediction"]
-                return f"GPT2服务错误: {response.text}"
-
-            @property
-            def _llm_type(self) -> str:
-                return "gpt2"
-
-        self.llm = GPT2LLM(service_url)
-        self.chain = self._create_chain(self.llm)
+                    json={"input_data": message}
+                ) as response:
+                    logger.info(f"GPT2服务响应状态码: {response.status}")
+                    
+                    if response.status == 200:
+                        result = await response.json()
+                        logger.info(f"GPT2服务响应内容: {result}")
+                        
+                        # 尝试不同的响应字段
+                        if "generated_text" in result:
+                            return result["generated_text"]
+                        elif "prediction" in result:
+                            return result["prediction"]
+                        elif "text" in result:
+                            return result["text"]
+                        else:
+                            logger.error(f"GPT2服务响应格式不正确: {result}")
+                            return "无法解析GPT2服务的响应"
+                    else:
+                        error_text = await response.text()
+                        logger.error(f"GPT2服务错误响应: {error_text}")
+                        return f"GPT2服务错误: {response.status} - {error_text}"
+                        
+        except asyncio.TimeoutError:
+            logger.error("GPT2服务请求超时")
+            return "GPT2服务请求超时，请稍后重试"
+        except Exception as e:
+            logger.error(f"GPT2服务调用错误: {str(e)}")
+            return f"GPT2服务调用失败: {str(e)}"
 
 class ModelManager:
     _instance = None
