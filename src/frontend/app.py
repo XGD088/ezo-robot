@@ -9,6 +9,7 @@ def get_available_models():
     try:
         response = requests.get("http://localhost:8000/models")
         if response.status_code == 200:
+            print(f"获取模型列表成功: {response.json()}")
             return response.json()["models"]
         return ["deepseek"]  # 默认模型
     except Exception as e:

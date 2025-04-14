@@ -4,9 +4,11 @@ from fastapi.middleware.cors import CORSMiddleware
 import os
 from dotenv import load_dotenv
 from src.model.model_manager import ModelManager, DeepSeekModel, GPT2Model
+from src.utils.logger import setup_logger
 
 # 加载环境变量
 load_dotenv()
+logger = setup_logger("endpoints")
 
 # 初始化 FastAPI 应用
 app = FastAPI()
@@ -45,7 +47,7 @@ async def chat_endpoint(data: ChatInput):
             raise HTTPException(status_code=400, detail=f"模型 {data.model_name} 不存在")
         
         # 使用选择的模型生成响应
-        response = await model.generate_response(data.message)
+        response = await model.generate_response(message=data.message)
         
         return {
             "response": response,
@@ -53,6 +55,7 @@ async def chat_endpoint(data: ChatInput):
             "model": data.model_name
         }
     except Exception as e:
+        logger.error(f"聊天接口错误: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/models")
@@ -60,8 +63,10 @@ async def list_models():
     """
     获取可用的模型列表
     """
+    models = model_manager.list_models()
+    logger.info(f"API返回的模型列表: {models}")
     return {
-        "models": model_manager.list_models()
+        "models": models
     }
 
 @app.get("/health")

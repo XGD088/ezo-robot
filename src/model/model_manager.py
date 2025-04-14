@@ -154,6 +154,7 @@ class GPT2Model(BaseModel):
         """设置GPT2特定的组件"""
         class GPT2LLM(BaseLLM):
             service_url: str = Field()
+            model_config = {"protected_namespaces": ()}
 
             def __init__(self, service_url: str):
                 super().__init__(service_url=service_url)
@@ -189,14 +190,18 @@ class ModelManager:
     def register_model(cls, name: str, model: BaseModel):
         cls._models[name] = model
         logger.info(f"模型已注册: {name}")
+        logger.info(f"当前已注册的模型列表: {list(cls._models.keys())}")
 
     @classmethod
     def get_model(cls, name: str) -> Optional[BaseModel]:
         model = cls._models.get(name)
         if not model:
             logger.warning(f"模型未找到: {name}")
+            logger.warning(f"当前可用的模型: {list(cls._models.keys())}")
         return model
 
     @classmethod
     def list_models(cls) -> list:
-        return list(cls._models.keys())
+        models = list(cls._models.keys())
+        logger.info(f"ModelManager.list_models() 返回的模型列表: {models}")
+        return models
