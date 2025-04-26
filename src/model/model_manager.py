@@ -1,30 +1,25 @@
-from abc import ABC, abstractmethod
-from typing import Dict, Any, Optional, List
-import time
-from dotenv import load_dotenv
-from langchain.chains.conversational_retrieval.base import ConversationalRetrievalChain
-from langchain.memory import ConversationBufferMemory
-from langchain.chains import ConversationChain
-from langchain.prompts import ChatPromptTemplate, MessagesPlaceholder
-from langchain_community.vectorstores import Qdrant
-from langchain_core.language_models import BaseLLM
-from langchain_core.embeddings import Embeddings
-from openai.types import Embedding
-from pydantic import Field
-import os
-from openai import OpenAI
-import aiohttp
-import json
 import asyncio
-from langchain.callbacks.tracers import ConsoleCallbackHandler
+import os
+import time
+from abc import ABC, abstractmethod
+from typing import Dict, Optional, List
+
+import aiohttp
+from dotenv import load_dotenv
+from langchain.callbacks import get_openai_callback
 from langchain.callbacks.streaming_stdout import StreamingStdOutCallbackHandler
+from langchain.callbacks.tracers import ConsoleCallbackHandler
+from langchain.memory import ChatMessageHistory
+from langchain.memory import ConversationBufferMemory
+from langchain.prompts import ChatPromptTemplate, MessagesPlaceholder
+from langchain.schema import HumanMessage, AIMessage
+from langchain_community.vectorstores import Qdrant
+from langchain_core.embeddings import Embeddings
+from langchain_openai import ChatOpenAI
+from openai import OpenAI
 
 from src.files.file_manager import load_documents, split_documents
 from src.utils.logger import setup_logger
-from langchain_openai import ChatOpenAI
-from langchain.callbacks import get_openai_callback
-from langchain.memory import ChatMessageHistory
-from langchain.schema import HumanMessage, AIMessage
 
 # 加载环境变量
 load_dotenv()
