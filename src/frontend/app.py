@@ -1,6 +1,7 @@
 import gradio as gr
 import requests
 import json
+import sseclient
 
 def get_available_models():
     """
@@ -21,20 +22,39 @@ def chat_with_bot(message, history, model_name):
     与后端API交互的函数
     """
     try:
+        # 发送请求并获取SSE流
         response = requests.post(
             "http://localhost:8000/chat",
             json={
                 "message": message,
                 "model_name": model_name
-            }
+            },
+            stream=True,
+            headers={'Accept': 'text/event-stream'}
         )
+        
         if response.status_code == 200:
-            # 返回正确的格式：[[用户消息, AI回复]]
-            return history + [[message, response.json()["response"]]]
+            # 创建SSE客户端
+            client = sseclient.SSEClient(response)
+            full_response = ""
+            
+            # 处理每个事件
+            for event in client.events():
+                if event.data:
+                    try:
+                        data = json.loads(event.data)
+                        if "response" in data:
+                            full_response += data["response"]
+                            # 使用 yield 返回更新后的历史记录
+                            yield history + [[message, full_response]]
+                    except json.JSONDecodeError:
+                        # 如果数据不是JSON格式，直接使用原始数据
+                        full_response += event.data
+                        yield history + [[message, full_response]]
         else:
-            return history + [[message, f"错误: {response.json()['detail']}"]]
+            yield history + [[message, f"错误: {response.json()['detail']}"]]
     except Exception as e:
-        return history + [[message, f"发生错误: {str(e)}"]]
+        yield history + [[message, f"发生错误: {str(e)}"]]
 
 # 获取可用的模型列表
 available_models = get_available_models()
@@ -85,7 +105,8 @@ with gr.Blocks(theme=gr.themes.Soft()) as demo:
     send.click(
         chat_with_bot,
         inputs=[msg, chatbot, model_dropdown],
-        outputs=chatbot
+        outputs=chatbot,
+        show_progress=True  # 显示进度条
     ).then(
         lambda: "",
         None,
@@ -97,7 +118,8 @@ with gr.Blocks(theme=gr.themes.Soft()) as demo:
     retry.click(
         lambda x, y, z: chat_with_bot(x[-1][0], x[:-1], z),
         inputs=[chatbot, msg, model_dropdown],
-        outputs=chatbot
+        outputs=chatbot,
+        show_progress=True  # 显示进度条
     )
 
 # 启动应用

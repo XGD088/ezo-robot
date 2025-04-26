@@ -16,17 +16,25 @@ from openai import OpenAI
 import aiohttp
 import json
 import asyncio
+from langchain.callbacks.tracers import ConsoleCallbackHandler
+from langchain.callbacks.streaming_stdout import StreamingStdOutCallbackHandler
 
 from src.files.file_manager import load_documents, split_documents
 from src.utils.logger import setup_logger
 from langchain_openai import ChatOpenAI
 from langchain.callbacks import get_openai_callback
+from langchain.memory import ChatMessageHistory
+from langchain.schema import HumanMessage, AIMessage
 
 # 加载环境变量
 load_dotenv()
 
 # 配置日志
 logger = setup_logger("model_manager")
+
+# 创建回调处理程序
+console_handler = ConsoleCallbackHandler()
+streaming_handler = StreamingStdOutCallbackHandler()
 
 class TongyiEmbeddings(Embeddings):
     """通义千问的 embeddings 实现"""
@@ -73,14 +81,23 @@ class BaseModel(ABC):
         # 配置 memory
         self.memory = ConversationBufferMemory(
             memory_key="chat_history",
-            return_messages=True
+            return_messages=True,
+            input_key="question",
+            output_key="answer",
+            chat_memory=ChatMessageHistory(),
+            human_prefix="Human",
+            ai_prefix="Assistant",
+            output_messages_key="chat_history",  # 明确指定输出消息键
+            message_class=HumanMessage,  # 指定消息类型
+            ai_message_class=AIMessage,  # 指定 AI 消息类型
+            memory_key_prefix="chat_history"  # 明确指定内存键前缀
         )
         
         # 配置基础 prompt
         self.prompt = ChatPromptTemplate.from_messages([
-            ("system", "你是一个有帮助的AI助手，请用中文回答用户的问题。"),
+            ("system", "你是一个有帮助的AI助手，请用中文回答用户的问题。请基于以下上下文信息来回答问题：\n{context}"),
             MessagesPlaceholder(variable_name="chat_history"),
-            ("human", "{input}")
+            ("human", "{question}")
         ])
 
         # 加载文档并创建向量存储
@@ -96,13 +113,26 @@ class BaseModel(ABC):
 
     def _create_chain(self, llm):
         """创建对话链"""
+        from langchain.schema.runnable import RunnablePassthrough, RunnableSequence
+        from langchain.chains.combine_documents import create_stuff_documents_chain
+        
+        # 创建检索器
         retriever = self.vectorstore.as_retriever()
-        return ConversationalRetrievalChain.from_llm(
-            llm=llm,
-            retriever=retriever,
-            memory=self.memory,
-            verbose=True
+        
+        # 创建文档链
+        document_chain = create_stuff_documents_chain(llm, self.prompt)
+        
+        # 创建自定义链
+        chain = RunnableSequence(
+            {
+                "context": retriever, 
+                "question": RunnablePassthrough(),
+                "chat_history": lambda x: self.memory.load_memory_variables({})["chat_history"]
+            }
+            | document_chain
         )
+        
+        return chain
 
     async def generate_response(self, message: str) -> str:
         """通用的响应生成方法"""
@@ -110,7 +140,11 @@ class BaseModel(ABC):
         
         try:
             with get_openai_callback() as cb:
-                result = await self.chain.ainvoke({"question": message})
+                # 添加控制台回调处理程序
+                result = await self.chain.ainvoke(
+                    {"question": message},
+                    config={"callbacks": [console_handler], "verbose": True}
+                )
                 logger.info(f"Token使用情况: {cb}")
                 
         except Exception as e:
@@ -122,6 +156,38 @@ class BaseModel(ABC):
             logger.info(f"请求完成，耗时: {runtime:.2f}秒")
             
         return result["answer"]
+
+    async def generate_response_stream(self, message: str):
+        """流式生成响应"""
+        try:
+            with get_openai_callback() as cb:  # 添加监控
+                # 使用 chain 进行流式输出，而不是直接使用 LLM
+                full_response = ""
+                async for chunk in self.chain.astream(
+                    message,
+                    config={"callbacks": [console_handler], "verbose": True}
+                ):
+                    if isinstance(chunk, str):
+                        full_response += chunk
+                        yield chunk
+                    elif isinstance(chunk, dict):
+                        # 处理字典类型的输出
+                        content = chunk.get("answer", "")
+                        if content:
+                            full_response += content
+                            yield content
+                
+                # 更新内存
+                self.memory.save_context(
+                    {"question": message},
+                    {"answer": full_response}
+                )
+                
+                logger.info(f"Token使用情况: {cb}")  # 记录 token 使用情况
+                logger.info(f"生成的响应: {full_response[:100]}...")  # 记录响应的前100个字符
+        except Exception as e:
+            logger.error(f"流式生成响应错误: {str(e)}")
+            yield f"发生错误: {str(e)}"
 
     @abstractmethod
     def _setup_model_specific_components(self):
@@ -142,7 +208,11 @@ class DeepSeekModel(BaseModel):
             openai_api_key=api_key,
             openai_api_base="https://tbnx.plus7.plus/v1",
             temperature=0.7,
-            request_timeout=30
+            request_timeout=30,
+            streaming=True,  # 启用流式输出
+            model_kwargs={
+                "stream": True  # 确保 API 调用也启用流式
+            }
         )
         self.chain = self._create_chain(self.llm)
 

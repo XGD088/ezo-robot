@@ -1,10 +1,12 @@
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 import os
 from dotenv import load_dotenv
 from src.model.model_manager import ModelManager, DeepSeekModel, GPT2Model
 from src.utils.logger import setup_logger
+import json
 
 # 加载环境变量
 load_dotenv()
@@ -20,6 +22,7 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"]
 )
 
 # 初始化模型管理器
@@ -47,13 +50,11 @@ async def chat_endpoint(data: ChatInput):
             raise HTTPException(status_code=400, detail=f"模型 {data.model_name} 不存在")
         
         # 使用选择的模型生成响应
-        response = await model.generate_response(message=data.message)
+        async def generate():
+            async for chunk in model.generate_response_stream(message=data.message):
+                yield f"data: {json.dumps({'response': chunk})}\n\n"
         
-        return {
-            "response": response,
-            "status": "success",
-            "model": data.model_name
-        }
+        return StreamingResponse(generate(), media_type="text/event-stream")
     except Exception as e:
         logger.error(f"聊天接口错误: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))

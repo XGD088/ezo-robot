@@ -14,3 +14,4 @@ langchain-core>=0.2.40
 docx2txt>=0.8
 pypdf>=3.17.0
 qdrant-client>=1.7.0
+sseclient-py==1.8.0
