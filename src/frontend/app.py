@@ -12,10 +12,10 @@ def get_available_models():
         if response.status_code == 200:
             print(f"获取模型列表成功: {response.json()}")
             return response.json()["models"]
-        return ["deepseek"]  # 默认模型
+        return ["qwen", "deepseek"]  # 默认模型列表，千问排在前面
     except Exception as e:
         print(f"获取模型列表失败: {str(e)}")
-        return ["deepseek"]  # 默认模型
+        return ["qwen", "deepseek"]  # 默认模型列表，千问排在前面
 
 def chat_with_bot(message, history, model_name):
     """
@@ -65,9 +65,11 @@ with gr.Blocks(theme=gr.themes.Soft()) as demo:
     gr.Markdown("这是一个支持多模型的AI聊天助手。请选择要使用的模型，然后开始对话。")
     
     with gr.Row():
+        # 设置默认选择为通义千问模型
+        default_model = "qwen" if "qwen" in available_models else available_models[0]
         model_dropdown = gr.Dropdown(
             choices=available_models,
-            value=available_models[0],
+            value=default_model,
             label="选择模型"
         )
     
