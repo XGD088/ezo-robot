@@ -90,30 +90,21 @@ pip install -r requirements.txt
 
 # 配置环境变量
 cp .env.example .env
-# 编辑 .env 文件，添加 DeepSeek API Key
+# 编辑 .env 文件，添加 DeepSeek API Key 和其他配置
 
-# 对于通义千问，创建专用配置
+# 如需使用通义千问，也可以创建专用配置
 cp .env.example .env.qwen
 # 编辑 .env.qwen 文件，添加 DASHSCOPE_API_KEY
 ```
 
 ### 启动服务
 
-#### DeepSeek 模式
-
 ```bash
-# 启动 API 服务
+# 启动 API 服务（默认使用 .env 配置）
 uvicorn src.api.endpoints:app --reload --port 8000
 
-# 启动前端界面
-python src/frontend/app.py  # 默认端口 7860
-```
-
-#### 通义千问模式
-
-```bash
-# 启动 API 服务 (使用通义千问配置)
-uvicorn src.api.endpoints:app --reload --port 8000 --env-file .env.qwen
+# 如需使用通义千问配置，可以指定环境文件
+# uvicorn src.api.endpoints:app --reload --port 8000 --env-file .env.qwen
 
 # 启动前端界面
 python src/frontend/app.py  # 默认端口 7860
