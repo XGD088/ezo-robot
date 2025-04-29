@@ -5,13 +5,10 @@ from typing import Dict, Any, Optional
 
 from langchain_core.language_models import BaseLLM
 from langchain_openai import ChatOpenAI
-from langchain_core.runnables import RunnableSequence, RunnablePassthrough
-from langchain.chains.combine_documents import create_stuff_documents_chain
-from langchain.prompts import ChatPromptTemplate, MessagesPlaceholder
-from langchain.schema import HumanMessage, AIMessage
 
 from src.model.base_model import RetrievalModel
 from src.model.config import DEFAULT_MODEL_CONFIG, QWEN_CONFIG
+from src.model.chains import create_retrieval_chain
 from src.utils.logger import setup_logger
 
 # 配置日志
@@ -76,17 +73,7 @@ class QwenModel(RetrievalModel):
         # 创建检索器
         retriever = self.vectorstore.as_retriever()
         
-        # 创建文档链
-        document_chain = create_stuff_documents_chain(self.llm, self.prompt)
-        
-        # 创建自定义链
-        self.chain = RunnableSequence(
-            {
-                "context": retriever, 
-                "question": RunnablePassthrough(),
-                "chat_history": lambda x: self.memory.load_memory_variables({})["chat_history"]
-            }
-            | document_chain
-        )
+        # 使用通用函数创建检索链
+        self.chain = create_retrieval_chain(self.llm, self.prompt, retriever, self.memory)
         
         logger.info("通义千问检索链已配置") 
