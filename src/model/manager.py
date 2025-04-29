@@ -77,16 +77,18 @@ class ModelManager:
         Raises:
             ValueError: 如果模型类型不支持
         """
-        from src.model.models import DeepSeekModel, GPT2Model
+        from src.model.models import DeepSeekModel, QwenModel
         
         if model_type.lower() == "deepseek":
             api_key = kwargs.get("api_key")
             if not api_key:
                 raise ValueError("DeepSeek模型需要提供API密钥")
             return DeepSeekModel(api_key, kwargs.get("config"))
-        elif model_type.lower() == "gpt2":
-            service_url = kwargs.get("service_url")
-            return GPT2Model(service_url, kwargs.get("config"))
+        elif model_type.lower() == "qwen":
+            api_key = kwargs.get("api_key")
+            if not api_key:
+                raise ValueError("通义千问模型需要提供API密钥")
+            return QwenModel(api_key, kwargs.get("config"))
         else:
             raise ValueError(f"不支持的模型类型: {model_type}")
 

@@ -2,7 +2,7 @@ import asyncio
 import os
 import time
 from abc import ABC, abstractmethod
-from typing import Dict, Optional, List
+from typing import Dict, Optional, List, Any
 
 import aiohttp
 from dotenv import load_dotenv
@@ -211,76 +211,41 @@ class DeepSeekModel(BaseModel):
         )
         self.chain = self._create_chain(self.llm)
 
-class GPT2Model(BaseModel):
-    def __init__(self, service_url: str = "http://localhost:8018"):
-        super().__init__()
-        if not service_url:
-            raise ValueError("GPT2服务URL不能为空")
-        self.service_url = service_url
-        self._setup_model_specific_components()
-
-    def _setup_model_specific_components(self):
-        """设置GPT2特定的组件"""
-        self.llm = None  # GPT2 不需要 LLM
-        self.chain = None  # GPT2 不需要 chain
-
-    async def generate_response(self, message: str) -> str:
-        """生成响应"""
-        try:
-            timeout = aiohttp.ClientTimeout(total=30)  # 设置30秒超时
-            async with aiohttp.ClientSession(timeout=timeout) as session:
-                logger.info(f"向GPT2服务发送请求: {self.service_url}/predict")
-                logger.info(f"请求内容: {message}")
-                
-                async with session.post(
-                    f"{self.service_url}/predict",
-                    json={"input_data": message}
-                ) as response:
-                    logger.info(f"GPT2服务响应状态码: {response.status}")
-                    
-                    if response.status == 200:
-                        result = await response.json()
-                        logger.info(f"GPT2服务响应内容: {result}")
-                        
-                        # 尝试不同的响应字段
-                        if "generated_text" in result:
-                            return result["generated_text"]
-                        elif "prediction" in result:
-                            return result["prediction"]
-                        elif "text" in result:
-                            return result["text"]
-                        else:
-                            logger.error(f"GPT2服务响应格式不正确: {result}")
-                            return "无法解析GPT2服务的响应"
-                    else:
-                        error_text = await response.text()
-                        logger.error(f"GPT2服务错误响应: {error_text}")
-                        return f"GPT2服务错误: {response.status} - {error_text}"
-                        
-        except asyncio.TimeoutError:
-            logger.error("GPT2服务请求超时")
-            return "GPT2服务请求超时，请稍后重试"
-        except Exception as e:
-            logger.error(f"GPT2服务调用错误: {str(e)}")
-            return f"GPT2服务调用失败: {str(e)}"
-
 class ModelManager:
+    """模型管理器，负责注册和获取模型"""
     _instance = None
     _models: Dict[str, BaseModel] = {}
 
     def __new__(cls):
+        """单例模式"""
         if cls._instance is None:
             cls._instance = super(ModelManager, cls).__new__(cls)
         return cls._instance
 
     @classmethod
-    def register_model(cls, name: str, model: BaseModel):
+    def register_model(cls, name: str, model: BaseModel) -> None:
+        """
+        注册模型
+        
+        Args:
+            name: 模型名称
+            model: 模型实例
+        """
         cls._models[name] = model
         logger.info(f"模型已注册: {name}")
         logger.info(f"当前已注册的模型列表: {list(cls._models.keys())}")
 
     @classmethod
     def get_model(cls, name: str) -> Optional[BaseModel]:
+        """
+        获取模型
+        
+        Args:
+            name: 模型名称
+            
+        Returns:
+            模型实例，如果不存在则返回None
+        """
         model = cls._models.get(name)
         if not model:
             logger.warning(f"模型未找到: {name}")
@@ -288,7 +253,59 @@ class ModelManager:
         return model
 
     @classmethod
-    def list_models(cls) -> list:
+    def list_models(cls) -> List[str]:
+        """
+        获取所有已注册的模型名称
+        
+        Returns:
+            模型名称列表
+        """
         models = list(cls._models.keys())
         logger.info(f"ModelManager.list_models() 返回的模型列表: {models}")
         return models
+
+    @classmethod
+    def create_model(cls, model_type: str, **kwargs) -> BaseModel:
+        """
+        创建模型实例（工厂方法）
+        
+        Args:
+            model_type: 模型类型
+            **kwargs: 模型参数
+            
+        Returns:
+            模型实例
+            
+        Raises:
+            ValueError: 如果模型类型不支持
+        """
+        from src.model.models import DeepSeekModel, QwenModel
+        
+        if model_type.lower() == "deepseek":
+            api_key = kwargs.get("api_key")
+            if not api_key:
+                raise ValueError("DeepSeek模型需要提供API密钥")
+            return DeepSeekModel(api_key, kwargs.get("config"))
+        elif model_type.lower() == "qwen":
+            api_key = kwargs.get("api_key")
+            if not api_key:
+                raise ValueError("通义千问模型需要提供API密钥")
+            return QwenModel(api_key, kwargs.get("config"))
+        else:
+            raise ValueError(f"不支持的模型类型: {model_type}")
+
+    @classmethod
+    def register_models_from_config(cls, config: Dict[str, Any]) -> None:
+        """
+        从配置中注册多个模型
+        
+        Args:
+            config: 模型配置字典
+        """
+        for name, model_config in config.items():
+            model_type = model_config.get("type")
+            try:
+                model = cls.create_model(model_type, **model_config)
+                cls.register_model(name, model)
+            except Exception as e:
+                logger.error(f"注册模型 {name} 失败: {str(e)}")

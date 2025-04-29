@@ -4,7 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 import os
 from dotenv import load_dotenv
-from src.model import ModelManager, DeepSeekModel, GPT2Model
+from src.model import ModelManager, DeepSeekModel, QwenModel
 from src.utils.logger import setup_logger
 import json
 
@@ -29,15 +29,8 @@ app.add_middleware(
 model_manager = ModelManager()
 
 # 注册可用的模型
-model_manager.register_model(
-    "deepseek", 
-    DeepSeekModel(os.getenv("DEEPSEEK_API_KEY"))
-)
-
-model_manager.register_model(
-    "gpt2", 
-    GPT2Model(os.getenv("GPT2_SERVICE_URL", "http://localhost:8018"))
-)
+model_manager.register_model("deepseek", DeepSeekModel(os.getenv("DEEPSEEK_API_KEY")))
+model_manager.register_model("qwen", QwenModel(os.getenv("DASHSCOPE_API_KEY")))
 
 class ChatInput(BaseModel):
     message: str

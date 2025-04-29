@@ -33,8 +33,8 @@ DEEPSEEK_CONFIG = {
     "api_base": "https://tbnx.plus7.plus/v1"
 }
 
-# GPT2模型特定配置
-GPT2_CONFIG = {
-    "default_service_url": "http://localhost:8018",
-    "timeout": 30
+# 通义千问模型特定配置
+QWEN_CONFIG = {
+    "model": "qwen-turbo",
+    "api_base": "https://dashscope.aliyuncs.com/compatible-mode/v1"
 } 
