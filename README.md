@@ -4,7 +4,7 @@
 
 ![Version](https://img.shields.io/badge/版本-1.0.0-blue)
 ![Python](https://img.shields.io/badge/Python-3.9+-green)
-![Models](https://img.shields.io/badge/Models-DeepSeek|_Qwen-orange)
+![Models](https://img.shields.io/badge/Models-DeepSeek_Qwen-orange)
 ---
 
 ## 📖 项目简介
