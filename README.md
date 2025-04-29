@@ -3,7 +3,7 @@
 > 基于 LangChain + RAG + 多模型集成的智能对话平台
 
 ![Version](https://img.shields.io/badge/版本-1.0.0-blue)
-![Models](https://img.shields.io/badge/模型-DeepSeek_Chat_|_通义千问-orange)
+![Models](https://img.shields.io/badge/模型-DeepSeek%20Chat%20%7C%20通义千问-orange)
 ![Python](https://img.shields.io/badge/Python-3.9+-green)
 
 ---
