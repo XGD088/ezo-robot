@@ -4,9 +4,7 @@
 
 ![Version](https://img.shields.io/badge/版本-1.0.0-blue)
 ![Python](https://img.shields.io/badge/Python-3.9+-green)
-![DeepSeek](https://img.shields.io/badge/模型-DeepSeek%20Chat-orange)
-![Qwen](https://img.shields.io/badge/模型-通义千问-orange)
-
+<img src="https://img.shields.io/badge/模型-DeepSeek%20Chat%20%7C%20通义千问-orange" alt="Models">
 ---
 
 ## 📖 项目简介
