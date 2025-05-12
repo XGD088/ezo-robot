@@ -61,8 +61,8 @@ available_models = get_available_models()
 
 # 创建Gradio界面
 with gr.Blocks(theme=gr.themes.Soft()) as demo:
-    gr.Markdown("# 🤖 AI 聊天助手")
-    gr.Markdown("这是一个支持多模型的AI聊天助手。请选择要使用的模型，然后开始对话。")
+    gr.Markdown("# 🤖💐易速鲜花客服机器人")
+    gr.Markdown("这里是速鲜花客服机器人，很高兴为您服务。可以尽情选择您要使用的模型，然后开始对话。")
     
     with gr.Row():
         # 设置默认选择为通义千问模型
